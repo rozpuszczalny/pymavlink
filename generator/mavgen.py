@@ -27,8 +27,7 @@ DEFAULT_ERROR_LIMIT = 200
 DEFAULT_VALIDATE = True
 
 # List the supported languages. This is done globally because it's used by the GUI wrapper too
-supportedLanguages = ["C", "CS", "JavaScript", "Python", "WLua", "ObjC", "Swift", "Java"]
-
+supportedLanguages = ["C", "CS", "JavaScript", "Python", "WLua", "ObjC", "Swift", "Java", "TypeScript"]
 
 def mavgen(opts, args):
     """Generate mavlink message formatters and parsers (C and Python ) using options
@@ -149,6 +148,9 @@ def mavgen(opts, args):
     elif opts.language == 'java':
         from . import mavgen_java
         mavgen_java.generate(opts.output, xml)
+    elif opts.language == 'typescript':
+        from . import mavgen_typescript
+        mavgen_typescript.generate(opts.output, xml)
     else:
         print("Unsupported language %s" % opts.language)
 
