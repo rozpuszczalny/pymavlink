@@ -34,7 +34,7 @@ def plot_input(data, msg, prefix, start, end):
 
 def check_drops(data, msg, start, end):
     ts = 1e-6 * numpy.array(data[msg + '.TimeUS'])
-    seqcnt = numpy.array(data[msg + '.SampleUS'])
+    seqcnt = numpy.array(data[msg + '.SampleC'])
 
     deltas = numpy.diff(seqcnt[start:end])
 #     print('ndeltas: ', len(deltas))
@@ -57,7 +57,7 @@ def check_drops(data, msg, start, end):
         if (deltas[i] > 1.5 * ts_mean):
             drop_lens.append(deltas[i])
             drop_times.append(ts[start+i])
-            print('dropout at sample {0}: length {1}'.format(i, deltas[i]))
+            print('dropout at sample {0}: length {1}'.format(start+i, deltas[i]))
     
     print('{0:d} sample intervals > {1:.3f}'.format(len(drop_lens), 1.5 * ts_mean))
     return avg_rate
@@ -75,10 +75,10 @@ def fft(logfile):
             'GYR2.rate' :  800,
             'GYR3.rate' : 1000}
     for acc in ['ACC1','ACC2','ACC3']:
-        for ax in ['AccX', 'AccY', 'AccZ', 'SampleUS', 'TimeUS']:
+        for ax in ['AccX', 'AccY', 'AccZ', 'SampleC', 'TimeUS']:
             data[acc+'.'+ax] = []
     for gyr in ['GYR1','GYR2','GYR3']:
-        for ax in ['GyrX', 'GyrY', 'GyrZ', 'SampleUS', 'TimeUS']:
+        for ax in ['GyrX', 'GyrY', 'GyrZ', 'SampleC', 'TimeUS']:
             data[gyr+'.'+ax] = []
 
     # now gather all the data
@@ -91,18 +91,18 @@ def fft(logfile):
             data[type+'.AccX'].append(m.AccX)
             data[type+'.AccY'].append(m.AccY)
             data[type+'.AccZ'].append(m.AccZ)
-            data[type+'.SampleUS'].append(m.SampleUS)
+            data[type+'.SampleC'].append(m.SampleC)
             data[type+'.TimeUS'].append(m.TimeUS)
         if type.startswith("GYR"):
             data[type+'.GyrX'].append(m.GyrX)
             data[type+'.GyrY'].append(m.GyrY)
             data[type+'.GyrZ'].append(m.GyrZ)
-            data[type+'.SampleUS'].append(m.SampleUS)
+            data[type+'.SampleC'].append(m.SampleC)
             data[type+'.TimeUS'].append(m.TimeUS)
 
-    # SampleUS is just a sample counter
+    # SampleC is just a sample counter
     ts = 1e-6 * numpy.array(data['ACC1.TimeUS'])
-    seqcnt = numpy.array(data['ACC1.SampleUS'])
+    seqcnt = numpy.array(data['ACC1.SampleC'])
 
     print("Extracted %u data points" % len(data['ACC1.AccX']))
     
@@ -161,7 +161,7 @@ def fft(logfile):
                 title = '{2} FFT [{0:d}:{1:d}]'.format(s_start, s_end, msg)
             
             # check for dropouts    
-            avg_rate = check_drops(data, msg, s_start, s_end)
+            data[msg+'.rate'] = check_drops(data, msg, s_start, s_end)
             plot_input(data, msg, prefix, s_start, s_end)
             
             fftwin = pylab.figure()
@@ -171,6 +171,7 @@ def fft(logfile):
             max_fft = 0
             abs_fft = {}
             index = 0
+            avg = {'X':0, 'Y':0, 'Z':0}
             for axis in ['X', 'Y', 'Z']:
                 field = msg + '.' + prefix + axis
                 d = data[field][s_start:s_end]
@@ -180,8 +181,9 @@ def fft(logfile):
                 d = numpy.array(d)
                 freq  = numpy.fft.rfftfreq(len(d), 1.0 / data[msg+'.rate'])
                 # remove mean
-                avg = numpy.mean(d)
-                d -= avg
+                avg[axis] = numpy.mean(d)
+                d -= avg[axis]
+                print('{1} DC component: {0:.3f}'.format(avg[axis], field))
                 # transform
                 d_fft = numpy.fft.rfft(d)
                 abs_fft[axis] = numpy.abs(d_fft)
@@ -200,9 +202,9 @@ def fft(logfile):
             fftwin.canvas.set_window_title(title)
             fftwin.gca().set_ylim(-90, 0)
             pylab.legend(loc='upper right')
-            pylab.xlabel('Hz : resolution = ' + '{0:.3f}'.format(f_res))
-            pylab.ylabel('dB')
-            pylab.subplots_adjust(left=0.06, right=0.95, top=0.95, bottom=0.16)
+            pylab.xlabel('Hz : res: ' + '{0:.3f}'.format(f_res))
+            pylab.ylabel('dB X {0:.3f} Y {1:.3f} Z {2:.3f}\n'.format(avg['X'], avg['Y'], avg['Z']))
+            pylab.subplots_adjust(left=0.1, right=0.95, top=0.95, bottom=0.16)
             fftwin.savefig(msg + '_fft.png')
         
         try:
