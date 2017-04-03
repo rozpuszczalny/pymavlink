@@ -8,41 +8,43 @@ Note: this file has been auto-generated. DO NOT EDIT
 
 // TODO: review methods copied from javascript generator
 // TODO: review architecture
-// TODO: do module declaration
+// TODO: Provide better documentation
 
 import { jspack } from 'jspack';
 import * as _ from 'underscore';
 import * as events from 'events';
 import * as util from 'util';
 
+// TODO: camelCase properties in classes (ignore in message classes)
+// TODO: (proposing) camelCase properties in message classes
 export module mavlink {
 // BEGIN OF PREAMBLE
-    class char extends String { }
-    class uint8_t extends Number { }
-    class int8_t extends Number { }
-    class uint16_t extends Number { }
-    class int16_t extends Number { }
-    class uint32_t extends Number { }
-    class int32_t extends Number { }
+    export class char extends String { }
+    export class uint8_t extends Number { }
+    export class int8_t extends Number { }
+    export class uint16_t extends Number { }
+    export class int16_t extends Number { }
+    export class uint32_t extends Number { }
+    export class int32_t extends Number { }
     // am I sure?
-    class uint64_t extends Array {
+    export class uint64_t extends Array {
         constructor(array: any[]) {
             super();
             return [array[0], array[1], true];
         }
     }
     // am I sure?
-    class int64_t extends Array {
+    export class int64_t extends Array {
         constructor(array: any[]) {
             super();
             return [array[0], array[1], false];
         }
     }
-    class float extends Number { }
-    class double extends Number { }
+    export class float extends Number { }
+    export class double extends Number { }
 
     // Mavlink headers incorporate sequence, source system (platform) and source component. 
-    class Header {
+    export class Header {
         constructor(public msgId: number, // Message ID
             public mlen: number = 0, // Message length
             public seq: number = 0, // Message sequence
@@ -53,7 +55,7 @@ export module mavlink {
         // Packs mavlink header and returns Buffer
         pack(): Buffer {
             return new Buffer(jspack.Pack('BBBBBB', [
-                253,
+                253, // TODO: Replace to PROTOCOL_MARKER !
                 this.mlen,
                 this.seq,
                 this.srcSystem,
@@ -61,6 +63,10 @@ export module mavlink {
                 this.msgId
             ]));
         }
+    }
+
+    export interface iWriter {
+        write(buffer: Buffer): void | number;
     }
 
     export class MAVLink extends events.EventEmitter {
@@ -79,7 +85,7 @@ export module mavlink {
         total_bytes_received: number = 0;
         total_receive_errors: number = 0;
         startup_time: number = Date.now(); // Should be date?
-        file: any; // WHAT IS THIS
+        file: iWriter; // WHAT IS THIS
 
         constructor(private logger: any,
             public srcSystem: number = 0,
@@ -99,7 +105,7 @@ export module mavlink {
 
         send(mavmsg: Message): void {
             let buf = mavmsg.pack(this);
-            this.file.write(buf);
+            this.file.write(buf); // TODO: Some error handling?
             this.seq = (this.seq + 1) % 256;
             this.total_packets_sent += 1;
             this.total_bytes_sent += buf.length;
@@ -168,7 +174,7 @@ export module mavlink {
             }
 
             if (null != message) {
-                this.emit(message.name, message);
+                this.emit(message.messageName, message);
                 this.emit('message', message);
             }
 
@@ -232,6 +238,7 @@ export module mavlink {
             }
         }
 
+        // TODO: Inspect code and make some better variable names.
         /* decode a buffer as a MAVLink message */
         decode(msgbuf: Buffer): Message {
             var magic, mlen, seq, srcSystem, srcComponent, unpacked: number[], msgId;
@@ -305,28 +312,28 @@ export module mavlink {
                 throw new Error('Unable to instantiate MAVLink message of type ' + decoder.type + ' : ' + e.message);
             }
             m.messageBuffer = msgbuf;
-            m.payload = msgbuf.slice(6);
-            m.header = new Header(msgId, mlen, seq, srcSystem, srcComponent);
+            m.messagePayload = msgbuf.slice(6);
+            m.messageHeader = new Header(msgId, mlen, seq, srcSystem, srcComponent);
             this.log(m);
             return m;
         }
 
     }
 
-    class Message {
-        id: number; // ID of message
+    export class Message {
+        messageId: number; // ID of message
         fieldNames: string[]; // Array of field names
 
         // TODO: Create structure, which will allow to staticly type 
         fieldsPayload: any[];   // Array of field payload. Index of this array
                                 // corresponds with index of fieldNames array
-        order: number[]; // Fields order for JSPack
-        format: string; // JSPack format
-        header: Header; // Header of the message
-        payload: Buffer; // Payload of current message
+        messageOrder: number[]; // Fields order for JSPack
+        messageFormat: string; // JSPack format
+        messageHeader: Header; // Header of the message
+        messagePayload: Buffer; // Payload of current message
         messageBuffer: number[] | Buffer; // Full message with header
-        name: string; // Message name
-        crc_extra: number; // crc extra number
+        messageName: string; // Message name
+        message_crc_extra: number; // crc extra number
 
         // Is this needed?
         new() {
@@ -355,24 +362,24 @@ export module mavlink {
 
         pack(mav: MAVLink): Buffer {
             // Pack message
-            this.payload = new Buffer(jspack.Pack(this.format, this.reorderFields(this.order).fields));
+            this.messagePayload = new Buffer(jspack.Pack(this.messageFormat, this.reorderFields(this.messageOrder).fields));
 
             // Pack header of the message
-            this.header = new Header(
-                this.id,
-                this.payload.length,
+            this.messageHeader = new Header(
+                this.messageId,
+                this.messagePayload.length,
                 mav.seq,
                 mav.srcSystem,
                 mav.srcComponent
             );
 
             // Concat whole message
-            this.messageBuffer = Buffer.concat([this.header.pack(), this.payload]);
+            this.messageBuffer = Buffer.concat([this.messageHeader.pack(), this.messagePayload]);
 
             // Calculate CRC and extra CRC
             let crc = utils.x25Crc(this.messageBuffer.slice(1));
 
-            crc = utils.x25Crc([this.crc_extra], crc);
+            crc = utils.x25Crc([this.message_crc_extra], crc);
             this.messageBuffer = Buffer.concat(
                 [
                     this.messageBuffer, 
@@ -387,67 +394,48 @@ export module mavlink {
     }
 // END OF PREAMBLE
 // BEGIN OF MESSAGES
-    class heartbeat extends Message {
-        constructor (public type, 
-            public autopilot, 
-            public base_mode, 
-            public custom_mode, 
-            public system_status, 
-            public mavlink_version) {
+    export namespace Messages {
+        export class heartbeat extends Message {
+            constructor (public type, 
+                public autopilot, 
+                public base_mode, 
+                public custom_mode, 
+                public system_status, 
+                public mavlink_version) {
 
-            super();
+                super();
 
-            this.format = '<IBBBBB';
-            this.id = 0;//mavlink.MAVLINK_MSG_ID_HEARTBEAT;
-            this.order = [1, 2, 3, 0, 4, 5];
-            this.crc_extra = 50;
-            this.name = 'HEARTBEAT';
+                this.messageFormat = '<IBBBBB';
+                this.messageId = 0;//mavlink.MAVLINK_MSG_ID_HEARTBEAT;
+                this.messageOrder = [1, 2, 3, 0, 4, 5];
+                this.message_crc_extra = 50;
+                this.messageName = 'HEARTBEAT';
 
-            this.fieldNames = ['type', 'autopilot', 'base_mode', 'custom_mode', 'system_status', 'mavlink_version'];
-            this.fieldsPayload = [].slice.call(arguments).slice(0, this.fieldNames.length);
+                this.fieldNames = ['type', 'autopilot', 'base_mode', 'custom_mode', 'system_status', 'mavlink_version'];
+                this.fieldsPayload = [].slice.call(arguments).slice(0, this.fieldNames.length);
+            }
         }
-    }
 
-    class set_mode extends Message {
-        constructor (public target_system, 
-            public base_mode, 
-            public custom_mode) {
-
-            super();
-
-            this.format = '<IBB';
-            this.id = 11;//mavlink.MAVLINK_MSG_ID_HEARTBEAT;
-            this.order = [1, 2, 0];
-            this.crc_extra = 89;
-            this.name = 'SET_MODE';
-
-            this.fieldNames = ['target_system', 'base_mode', 'custom_mode'];
-            this.fieldsPayload = [].slice.call(arguments).slice(0, this.fieldNames.length);
+        export class bad_data extends Message {
+            constructor(public data: Buffer | number[], public reason: string) {
+                super();
+                this.messageId = Enums.MSG_ID.BAD_DATA;
+                this.messageBuffer = data;
+            }
         }
-    }
-
-    class bad_data extends Message {
-        constructor(public data: Buffer | number[], public reason: string) {
-            super();
-            this.id = MSG_ID.BAD_DATA;
-            this.messageBuffer = data;
-        }
-    }
-
-    export class Messages {
-        static bad_data = bad_data;
-        static heartbeat = heartbeat;
-        static set_mode = set_mode;
     }
 // END OF MESSAGES
 // BEGIN OF ENUMS
-    // TODO: Consider using const enum
-    export enum MSG_ID {
-        BAD_DATA = -1,
+    export namespace Enums {
+        // TODO: Consider using const enum
+        export enum MSG_ID {
+            BAD_DATA = -1,
+        }
     }
 // END OF ENUMS
 // BEGIN OF END
-    class map_element {
+    // TODO: Change name?
+    export class MapElement {
         format: string;
         type: typeof Message; // TODO: Type as message - interference?
         order_map: number[];
@@ -457,8 +445,15 @@ export module mavlink {
 
     export class utils {
         static x25Crc(buffer: number[] | Buffer, crc: number = 0xffff): number {
-            let bytes = buffer;
+            let bytes: Buffer;
 
+            if (buffer instanceof Buffer) {
+                bytes = buffer;
+            } else {
+                bytes = Buffer.from(buffer);
+            }
+
+            // TODO: Remove this nasty underscore js...
             _.each(bytes, (e) => {
                 let tmp = e ^ (crc & 0xff);
                 tmp = (tmp ^ (tmp << 4)) & 0xff;
@@ -469,7 +464,7 @@ export module mavlink {
             return crc;
         }
 
-        WIRE_PROTOCOL_VERSION: string = "";
+        WIRE_PROTOCOL_VERSION: string = ""; // TODO: Replace to WIRE_PROTOCOL_VERSION
 
         // Not sure if it's needed.
         readonly MAVLINK_TYPE_CHAR = 0;
@@ -484,18 +479,14 @@ export module mavlink {
         readonly MAVLINK_TYPE_FLOAT = 9;
         readonly MAVLINK_TYPE_DOUBLE = 10;
 
-        static header = Header;
-        static map: map_element[];
-        static mav = MAVLink;
+        static map: MapElement[] = [];
     }
-
-    utils.map = [];
 
     utils.map[4] = {
         format: "A",
         type: Messages.heartbeat as typeof Message,
         order_map: [0, 1],
         crc_extra: 0,
-        id: MSG_ID.BAD_DATA
+        id: Enums.MSG_ID.BAD_DATA
     }
 }

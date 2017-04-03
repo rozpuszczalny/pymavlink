@@ -31,38 +31,40 @@ Note: this file has been auto-generated. DO NOT EDIT
 
 // TODO: review methods copied from javascript generator
 // TODO: review architecture
-// TODO: do module declaration
+// TODO: Provide better documentation
 
 import { jspack } from 'jspack';
 import * as _ from 'underscore';
 import * as events from 'events';
 import * as util from 'util';
 
+// TODO: camelCase properties in classes (ignore in message classes)
+// TODO: (proposing) camelCase properties in message classes
 export module mavlink {
 // BEGIN OF PREAMBLE
-    class char extends String { }
-    class uint8_t extends Number { }
-    class int8_t extends Number { }
-    class uint16_t extends Number { }
-    class int16_t extends Number { }
-    class uint32_t extends Number { }
-    class int32_t extends Number { }
+    export class char extends String { }
+    export class uint8_t extends Number { }
+    export class int8_t extends Number { }
+    export class uint16_t extends Number { }
+    export class int16_t extends Number { }
+    export class uint32_t extends Number { }
+    export class int32_t extends Number { }
     // am I sure?
-    class uint64_t extends Array {
+    export class uint64_t extends Array {
         constructor(array: any[]) {
             super();
             return [array[0], array[1], true];
         }
     }
     // am I sure?
-    class int64_t extends Array {
+    export class int64_t extends Array {
         constructor(array: any[]) {
             super();
             return [array[0], array[1], false];
         }
     }
-    class float extends Number { }
-    class double extends Number { }
+    export class float extends Number { }
+    export class double extends Number { }
 
     // Mavlink headers incorporate sequence, source system (platform) and source component. 
     export class Header {
@@ -76,7 +78,7 @@ export module mavlink {
         // Packs mavlink header and returns Buffer
         pack(): Buffer {
             return new Buffer(jspack.Pack('BBBBBB', [
-                ${PROTOCOL_MARKER},
+                253, // TODO: Replace to PROTOCOL_MARKER !
                 this.mlen,
                 this.seq,
                 this.srcSystem,
@@ -84,6 +86,10 @@ export module mavlink {
                 this.msgId
             ]));
         }
+    }
+
+    export interface iWriter {
+        write(buffer: Buffer): void | number;
     }
 
     export class MAVLink extends events.EventEmitter {
@@ -102,7 +108,7 @@ export module mavlink {
         total_bytes_received: number = 0;
         total_receive_errors: number = 0;
         startup_time: number = Date.now(); // Should be date?
-        file: any; // WHAT IS THIS
+        file: iWriter; // WHAT IS THIS
 
         constructor(private logger: any,
             public srcSystem: number = 0,
@@ -122,7 +128,7 @@ export module mavlink {
 
         send(mavmsg: Message): void {
             let buf = mavmsg.pack(this);
-            this.file.write(buf);
+            this.file.write(buf); // TODO: Some error handling?
             this.seq = (this.seq + 1) % 256;
             this.total_packets_sent += 1;
             this.total_bytes_sent += buf.length;
@@ -191,7 +197,7 @@ export module mavlink {
             }
 
             if (null != message) {
-                this.emit(message.name, message);
+                this.emit(message.messageName, message);
                 this.emit('message', message);
             }
 
@@ -255,6 +261,7 @@ export module mavlink {
             }
         }
 
+        // TODO: Inspect code and make some better variable names.
         /* decode a buffer as a MAVLink message */
         decode(msgbuf: Buffer): Message {
             var magic, mlen, seq, srcSystem, srcComponent, unpacked: number[], msgId;
@@ -328,8 +335,8 @@ export module mavlink {
                 throw new Error('Unable to instantiate MAVLink message of type ' + decoder.type + ' : ' + e.message);
             }
             m.messageBuffer = msgbuf;
-            m.payload = msgbuf.slice(6);
-            m.header = new Header(msgId, mlen, seq, srcSystem, srcComponent);
+            m.messagePayload = msgbuf.slice(6);
+            m.messageHeader = new Header(msgId, mlen, seq, srcSystem, srcComponent);
             this.log(m);
             return m;
         }
@@ -337,19 +344,19 @@ export module mavlink {
     }
 
     export class Message {
-        id: number; // ID of message
+        messageId: number; // ID of message
         fieldNames: string[]; // Array of field names
 
         // TODO: Create structure, which will allow to staticly type 
         fieldsPayload: any[];   // Array of field payload. Index of this array
                                 // corresponds with index of fieldNames array
-        order: number[]; // Fields order for JSPack
-        format: string; // JSPack format
-        header: Header; // Header of the message
-        payload: Buffer; // Payload of current message
+        messageOrder: number[]; // Fields order for JSPack
+        messageFormat: string; // JSPack format
+        messageHeader: Header; // Header of the message
+        messagePayload: Buffer; // Payload of current message
         messageBuffer: number[] | Buffer; // Full message with header
-        name: string; // Message name
-        crc_extra: number; // crc extra number
+        messageName: string; // Message name
+        message_crc_extra: number; // crc extra number
 
         // Is this needed?
         new() {
@@ -378,24 +385,24 @@ export module mavlink {
 
         pack(mav: MAVLink): Buffer {
             // Pack message
-            this.payload = new Buffer(jspack.Pack(this.format, this.reorderFields(this.order).fields));
+            this.messagePayload = new Buffer(jspack.Pack(this.messageFormat, this.reorderFields(this.messageOrder).fields));
 
             // Pack header of the message
-            this.header = new Header(
-                this.id,
-                this.payload.length,
+            this.messageHeader = new Header(
+                this.messageId,
+                this.messagePayload.length,
                 mav.seq,
                 mav.srcSystem,
                 mav.srcComponent
             );
 
             // Concat whole message
-            this.messageBuffer = Buffer.concat([this.header.pack(), this.payload]);
+            this.messageBuffer = Buffer.concat([this.messageHeader.pack(), this.messagePayload]);
 
             // Calculate CRC and extra CRC
             let crc = utils.x25Crc(this.messageBuffer.slice(1));
 
-            crc = utils.x25Crc([this.crc_extra], crc);
+            crc = utils.x25Crc([this.message_crc_extra], crc);
             this.messageBuffer = Buffer.concat(
                 [
                     this.messageBuffer, 
@@ -414,33 +421,43 @@ export module mavlink {
       'crc_extra': xml.crc_extra,
       'WIRE_PROTOCOL_VERSION': xml.wire_protocol_version})
 
-
-def generate_enums(outf, enums):
+def generate_enums(outf, enums, msgs):
     print("Generating enums")
     outf.write("\n// enums\n")
-    wrapper = textwrap.TextWrapper(
-        initial_indent="", subsequent_indent="                        // ")
+    outf.write("""
+    export namespace Enums {
+""")
     for e in enums:
-        outf.write("\n// %s\n" % e.name)
-        outf.write("\texport enum %s {\n" % e.name)
+        outf.write("""
+        // {ENUM_NAME}
+        export enum {ENUM_NAME} {{""".format(ENUM_NAME=e.name))
+        # outf.write("\n// %s\n" % e.name)
+        # outf.write("\texport enum %s {\n" % e.name)
         for entry in e.entry:
-            outf.write("\t\t%s = %u,\n" % (entry.name, entry.value))
+            outf.write("""
+            %s = %u,""" % (entry.name, entry.value))
             # outf.write("mavlink.%s = %u // %s\n" %
             #            (entry.name, entry.value, wrapper.fill(entry.description)))
 
-        outf.write("\t}\n")
+        outf.write("""
+        }
+""")
+    generate_message_ids(outf, msgs)
+    outf.write("""
+    }
+""")
 
 
 def generate_message_ids(outf, msgs):
     print("Generating message IDs")
     outf.write("\n// message IDs\n")
-    outf.write("\texport enum MSG_ID {\n")
-    outf.write("\t\tBAD_DATA = -1,\n")
+    outf.write("\t\texport enum MSG_ID {\n")
+    outf.write("\t\t\tBAD_DATA = -1,\n")
     # outf.write("mavlink.MAVLINK_MSG_ID_BAD_DATA = -1\n")
     for m in msgs:
-        outf.write("\t\t%s = %u,\n" % (m.name.upper(), m.id))
+        outf.write("\t\t\t%s = %u,\n" % (m.name.upper(), m.id))
         # outf.write("mavlink.MAVLINK_MSG_ID_%s = %u\n" % (m.name.upper(), m.id))
-    outf.write("\t}\n")
+    outf.write("\t\t}\n")
 
 # TODO: Group into namespaces
 def generate_classes(outf, msgs):
@@ -449,48 +466,82 @@ def generate_classes(outf, msgs):
 
     """
     print("Generating class definitions")
+    outf.write("""
+    export namespace Messages {
+""")
 
     for m in msgs:
         constructorz = ""
-        for arg in m.fieldnames:
-            constructorz += "public %s, " % arg
+        fieldNames = "["
+        fieldDesc = ""
+        for arg in m.fields:
+            constructorz += "public %s: %s, " % ( arg.name, arg.type )
+            fieldNames += "'%s', " % arg.name
+            fieldDesc += "\t\t\t * @param %s %s\n" % (arg.name, arg.description)
 
+        
+        fieldNames = fieldNames[:-2] + "]"
+
+        # TODO: Split description
         outf.write("""
+        /**
+         * {description}
+         */
+        export class {name_lower} extends Message {{
+            /**
+{fieldDesc}*/
+            constructor ({constructor_list}) {{
 
-    export class %s extends Message {
-        constructor (%s) {
+                super();
 
-            super();
+                this.messageFormat = '{format}';
+                this.messageId = Enums.MSG_ID.{name_upper};
+                this.messageOrder = {order_map};
+                this.message_crc_extra = {crc_extra};
+                this.messageName = '{name_upper}';
 
-            this.format = '%s';
-            this.id = %s;
-            this.order = %s;
-            this.crc_extra = %s;
-            this.name = '%s';
-
-            this.fieldNames = ['target_system', 'base_mode', 'custom_mode'];
-            this.fieldsPayload = [].slice.call(arguments).slice(0, this.fieldNames.length);
-        }
-    }
-        """ % (m.name.lower(), constructorz[:-2], m.fmtstr, "MSG_ID."+m.name, str(m.order_map), m.crc_extra, m.name)
+                this.fieldNames = {field_names};
+                this.fieldsPayload = [].slice.call(arguments).slice(0, this.fieldNames.length);
+            }}
+        }}
+        """ .format(
+            name_lower=m.name.lower(), 
+            constructor_list=constructorz[:-2], 
+            format=m.fmtstr, 
+            name_upper=m.name, 
+            order_map=str(m.order_map), 
+            crc_extra=m.crc_extra, 
+            field_names=fieldNames,
+            description=m.description,fieldDesc=fieldDesc)
         )
-
-# TODO: Bad data ...
-def generate_classes_class(outf, msgs):
     outf.write("""
     export class bad_data extends Message {
         constructor(public data: Buffer | number[], public reason: string) {
             super();
-            this.id = MSG_ID.BAD_DATA;
+            this.messageId = Enums.MSG_ID.BAD_DATA;
             this.messageBuffer = data;
         }
     }
     """)
-    outf.write("export class Messages {\n")
-    outf.write("\tstatic bad_data = bad_data;\n")
-    for m in msgs:
-        outf.write("\tstatic %s = %s;\n" % (m.name.lower(), m.name.lower()))
-    outf.write("}\n")
+    outf.write("}")
+
+# TODO: Bad data ...
+def generate_classes_class(outf, msgs):
+    pass
+    # outf.write("""
+    # export class bad_data extends Message {
+    #     constructor(public data: Buffer | number[], public reason: string) {
+    #         super();
+    #         this.id = MSG_ID.BAD_DATA;
+    #         this.messageBuffer = data;
+    #     }
+    # }
+    # """)
+    # outf.write("export class Messages {\n")
+    # outf.write("\tstatic bad_data = bad_data;\n")
+    # for m in msgs:
+    #     outf.write("\tstatic %s = %s;\n" % (m.name.lower(), m.name.lower()))
+    # outf.write("}\n")
 
 def mavfmt(field):
     '''work out the struct format for a type'''
@@ -516,307 +567,10 @@ def mavfmt(field):
     return map[field.type]
 
 
-def generate_mavlink_class(outf, msgs, xml):
-    print("Generating MAVLink class")
-
-    # Write mapper to enable decoding based on the integer message type
-    outf.write("\n\nmavlink.map = {\n")
-    for m in msgs:
-        outf.write("        %s: { format: '%s', type: mavlink.messages.%s, order_map: %s, crc_extra: %u },\n" % (
-            m.id, m.fmtstr, m.name.lower(), m.order_map, m.crc_extra))
-    outf.write("}\n\n")
-
-    t.write(outf, """
-
-// Special mavlink message to capture malformed data packets for debugging
-mavlink.messages.bad_data = function(data, reason) {
-    this.id = mavlink.MAVLINK_MSG_ID_BAD_DATA;
-    this.data = data;
-    this.reason = reason;
-    this.msgbuf = data;
-}
-
-/* MAVLink protocol handling class */
-MAVLink = function(logger, srcSystem, srcComponent) {
-
-    this.logger = logger;
-
-    this.seq = 0;
-    this.buf = new Buffer(0);
-    this.bufInError = new Buffer(0);
-   
-    this.srcSystem = (typeof srcSystem === 'undefined') ? 0 : srcSystem;
-    this.srcComponent =  (typeof srcComponent === 'undefined') ? 0 : srcComponent;
-
-    // The first packet we expect is a valid header, 6 bytes.
-    this.expected_length = 6;
-
-    this.have_prefix_error = false;
-
-    this.protocol_marker = 254;
-    this.little_endian = true;
-
-    this.crc_extra = true;
-    this.sort_fields = true;
-    this.total_packets_sent = 0;
-    this.total_bytes_sent = 0;
-    this.total_packets_received = 0;
-    this.total_bytes_received = 0;
-    this.total_receive_errors = 0;
-    this.startup_time = Date.now();
-    
-}
-
-// Implements EventEmitter
-util.inherits(MAVLink, events.EventEmitter);
-
-// If the logger exists, this function will add a message to it.
-// Assumes the logger is a winston object.
-MAVLink.prototype.log = function(message) {
-    if(this.logger) {
-        this.logger.info(message);
-    }
-}
-
-MAVLink.prototype.log = function(level, message) {
-    if(this.logger) {
-        this.logger.log(level, message);
-    }
-}
-
-MAVLink.prototype.send = function(mavmsg) {
-    buf = mavmsg.pack(this);
-    this.file.write(buf);
-    this.seq = (this.seq + 1) % 256;
-    this.total_packets_sent +=1;
-    this.total_bytes_sent += buf.length;
-}
-
-// return number of bytes needed for next parsing stage
-MAVLink.prototype.bytes_needed = function() {
-    ret = this.expected_length - this.buf.length;
-    return ( ret <= 0 ) ? 1 : ret;
-}
-
-// add data to the local buffer
-MAVLink.prototype.pushBuffer = function(data) {
-    if(data) {
-        this.buf = Buffer.concat([this.buf, data]);
-        this.total_bytes_received += data.length;
-    }
-}
-
-// Decode prefix.  Elides the prefix.
-MAVLink.prototype.parsePrefix = function() {
-
-    // Test for a message prefix.
-    if( this.buf.length >= 1 && this.buf[0] != 254 ) {
-
-        // Strip the offending initial byte and throw an error.
-        var badPrefix = this.buf[0];
-        this.bufInError = this.buf.slice(0,1);
-        this.buf = this.buf.slice(1);
-        this.expected_length = 6;
-
-        // TODO: enable subsequent prefix error suppression if robust_parsing is implemented
-        //if(!this.have_prefix_error) {
-        //    this.have_prefix_error = true;
-            throw new Error("Bad prefix ("+badPrefix+")");
-        //}
-
-    }
-    //else if( this.buf.length >= 1 && this.buf[0] == 254 ) {
-    //    this.have_prefix_error = false;
-    //}
-
-}
-
-// Determine the length.  Leaves buffer untouched.
-MAVLink.prototype.parseLength = function() {
-    
-    if( this.buf.length >= 2 ) {
-        var unpacked = jspack.Unpack('BB', this.buf.slice(0, 2));
-        this.expected_length = unpacked[1] + 8; // length of message + header + CRC
-    }
-
-}
-
-// input some data bytes, possibly returning a new message
-MAVLink.prototype.parseChar = function(c) {
-
-    var m = null;
-
-    try {
-
-        this.pushBuffer(c);
-        this.parsePrefix();
-        this.parseLength();
-        m = this.parsePayload();
-
-    } catch(e) {
-
-        this.log('error', e.message);
-        this.total_receive_errors += 1;
-        m = new mavlink.messages.bad_data(this.bufInError, e.message);
-        this.bufInError = new Buffer(0);
-        
-    }
-
-    if(null != m) {
-        this.emit(m.name, m);
-        this.emit('message', m);
-    }
-
-    return m;
-
-}
-
-MAVLink.prototype.parsePayload = function() {
-
-    var m = null;
-
-    // If we have enough bytes to try and read it, read it.
-    if( this.expected_length >= 8 && this.buf.length >= this.expected_length ) {
-
-        // Slice off the expected packet length, reset expectation to be to find a header.
-        var mbuf = this.buf.slice(0, this.expected_length);
-        // TODO: slicing off the buffer should depend on the error produced by the decode() function
-        // - if a message we find a well formed message, cut-off the expected_length
-        // - if the message is not well formed (correct prefix by accident), cut-off 1 char only
-        this.buf = this.buf.slice(this.expected_length);
-        this.expected_length = 6;
-
-        // w.info("Attempting to parse packet, message candidate buffer is ["+mbuf.toByteArray()+"]");
-
-        try {
-            m = this.decode(mbuf);
-            this.total_packets_received += 1;
-        }
-        catch(e) {
-            // Set buffer in question and re-throw to generic error handling
-            this.bufInError = mbuf;
-            throw e;
-        }
-    }
-
-    return m;
-
-}
-
-// input some data bytes, possibly returning an array of new messages
-MAVLink.prototype.parseBuffer = function(s) {
-    
-    // Get a message, if one is available in the stream.
-    var m = this.parseChar(s);
-
-    // No messages available, bail.
-    if ( null === m ) {
-        return null;
-    }
-    
-    // While more valid messages can be read from the existing buffer, add
-    // them to the array of new messages and return them.
-    var ret = [m];
-    while(true) {
-        m = this.parseChar();
-        if ( null === m ) {
-            // No more messages left.
-            return ret;
-        }
-        ret.push(m);
-    }
-    return ret;
-
-}
-
-/* decode a buffer as a MAVLink message */
-MAVLink.prototype.decode = function(msgbuf) {
-
-    var magic, mlen, seq, srcSystem, srcComponent, unpacked, msgId;
-
-    // decode the header
-    try {
-        unpacked = jspack.Unpack('cBBBBB', msgbuf.slice(0, 6));
-        magic = unpacked[0];
-        mlen = unpacked[1];
-        seq = unpacked[2];
-        srcSystem = unpacked[3];
-        srcComponent = unpacked[4];
-        msgId = unpacked[5];
-    }
-    catch(e) {
-        throw new Error('Unable to unpack MAVLink header: ' + e.message);
-    }
-
-    if (magic.charCodeAt(0) != 254) {
-        throw new Error("Invalid MAVLink prefix ("+magic.charCodeAt(0)+")");
-    }
-
-    if( mlen != msgbuf.length - 8 ) {
-        throw new Error("Invalid MAVLink message length.  Got " + (msgbuf.length - 8) + " expected " + mlen + ", msgId=" + msgId);
-    }
-
-    if( false === _.has(mavlink.map, msgId) ) {
-        throw new Error("Unknown MAVLink message ID (" + msgId + ")");
-    }
-
-    // decode the payload
-    // refs: (fmt, type, order_map, crc_extra) = mavlink.map[msgId]
-    var decoder = mavlink.map[msgId];
-
-    // decode the checksum
-    try {
-        var receivedChecksum = jspack.Unpack('<H', msgbuf.slice(msgbuf.length - 2));
-    } catch (e) {
-        throw new Error("Unable to unpack MAVLink CRC: " + e.message);
-    }
-
-    var messageChecksum = mavlink.x25Crc(msgbuf.slice(1, msgbuf.length - 2));
-
-    // Assuming using crc_extra = True.  See the message.prototype.pack() function.
-    messageChecksum = mavlink.x25Crc([decoder.crc_extra], messageChecksum);
-    
-    if ( receivedChecksum != messageChecksum ) {
-        throw new Error('invalid MAVLink CRC in msgID ' +msgId+ ', got 0x' + receivedChecksum + ' checksum, calculated payload checkum as 0x'+messageChecksum );
-    }
-
-    // Decode the payload and reorder the fields to match the order map.
-    try {
-        var t = jspack.Unpack(decoder.format, msgbuf.slice(6, msgbuf.length));
-    }
-    catch (e) {
-        throw new Error('Unable to unpack MAVLink payload type='+decoder.type+' format='+decoder.format+' payloadLength='+ msgbuf.slice(6, -2).length +': '+ e.message);
-    }
-
-    // Reorder the fields to match the order map
-    var args = [];
-    _.each(t, function(e, i, l) {
-        args[i] = t[decoder.order_map[i]]
-    });
-
-    // construct the message object
-    try {
-        var m = new decoder.type(args);
-        m.set.call(m, args);
-    }
-    catch (e) {
-        throw new Error('Unable to instantiate MAVLink message of type '+decoder.type+' : ' + e.message);
-    }
-    m.msgbuf = msgbuf;
-    m.payload = msgbuf.slice(6);
-    m.crc = receivedChecksum;
-    m.header = new mavlink.header(msgId, mlen, seq, srcSystem, srcComponent);
-    this.log(m);
-    return m;
-}
-
-""", xml)
-
-
 def generate_utils(outf):
     outf.write("""
     // BEGIN OF END
-    export class map_element {
+    export class MapElement {
         format: string;
         type: typeof Message; // TODO: Type as message - interference?
         order_map: number[];
@@ -853,9 +607,7 @@ def generate_utils(outf):
         readonly MAVLINK_TYPE_FLOAT = 9;
         readonly MAVLINK_TYPE_DOUBLE = 10;
 
-        static header = Header;
-        static map: map_element[] = [];
-        static mav = MAVLink;
+        static map: MapElement[] = [];
     }
     """)
 
@@ -867,7 +619,7 @@ def generate_map(outf, msgs):
             type: Messages.%s as typeof Message,
             order_map: %s,
             crc_extra: %s,
-            id: MSG_ID.%s
+            id: Enums.MSG_ID.%s
         }
         """ % (m.id, m.fmtstr, m.name.lower(), str(m.order_map), m.crc_extra, m.name.upper()))
 
@@ -908,10 +660,9 @@ def generate(basename, xml):
     print("Generating %s" % filename)
     outf = open(filename, "w")
     generate_preamble(outf, msgs, filelist, xml[0])
-    generate_enums(outf, enums)
-    generate_message_ids(outf, msgs)
+    generate_enums(outf, enums, msgs)
+    # generate_message_ids(outf, msgs)
     generate_classes(outf, msgs)
-    generate_classes_class(outf, msgs)
     generate_utils(outf)
     generate_map(outf, msgs)
     # generate_mavlink_class(outf, msgs, xml[0])
